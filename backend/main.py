@@ -89,6 +89,19 @@ def get_or_create_person(name: str) -> int:
     return person_id
 
 
+def get_person_id_by_name(name: str):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("SELECT id FROM persons WHERE name = ?", (name,))
+    row = cur.fetchone()
+    conn.close()
+
+    if row:
+        return row["id"]
+    return None
+
+
 # =========================
 # SESSION HELPERS
 # =========================
@@ -166,60 +179,115 @@ def build_combined_transcript(person_id: int) -> str:
     return "\n\n".join(parts)
 
 
-def generate_biography_from_all_sessions(person_name: str, combined_transcript: str) -> str:
-    structured = client.chat.completions.create(
+# =========================
+# OPENAI HELPERS
+# =========================
+
+def generate_single_session_summary(person_name: str, transcript_text: str) -> str:
+    response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {
                 "role": "system",
                 "content": """
-Du bist ein Assistent für die strukturierte Aufbereitung von Lebenserinnerungen.
+Du fasst eine einzelne Sprachaufnahme kurz und ehrlich zusammen.
 
-Deine Aufgabe:
-Du erhältst mehrere Sessions einer Person. Jede Session enthält Ausschnitte aus Erzählungen über das Leben dieser Person.
-Du sollst daraus eine ehrliche, vorsichtige, zusammengeführte Lebensskizze in deutscher Sprache erstellen.
+REGELN:
+1. Verwende nur Informationen, die tatsächlich genannt wurden.
+2. Erfinde nichts.
+3. Keine Psychologisierung.
+4. Keine typischen Lebensstationen ergänzen.
+5. Kein Romanstil.
+6. Kurz, ruhig, nüchtern, klar.
+7. Wenn sehr wenig Inhalt vorhanden ist, bleibe ehrlich knapp.
+8. Keine Höflichkeitsform.
+9. Nicht das Geschlecht raten.
+10. Wenn das Geschlecht unklar ist, nutze lieber den Namen oder "die Person".
 
-WICHTIGE REGELN:
+ZIEL:
+Eine kurze, sachliche Zusammenfassung der einzelnen Session.
+"""
+            },
+            {
+                "role": "user",
+                "content": f"Person: {person_name}\n\nTranskript der neuen Session:\n\n{transcript_text}"
+            }
+        ]
+    )
+
+    return response.choices[0].message.content.strip()
+
+
+def generate_biography_and_questions(person_name: str, combined_transcript: str):
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": """
+Du bist ein System zur strukturierten Rekonstruktion von Lebenserinnerungen.
+
+Du erhältst mehrere Sessions einer Person.
+Deine Aufgabe ist zweigeteilt:
+
+1. Erstelle eine zusammengeführte, ehrliche Lebensskizze.
+2. Erstelle 3 bis 5 gezielte Folgefragen, die helfen, Lücken sinnvoll zu füllen.
+
+WICHTIGE REGELN FÜR DIE BIOGRAFIE:
 1. Verwende ausschließlich Informationen, die in den Sessions tatsächlich genannt wurden.
-2. Erfinde keine Fakten, Motive, Hintergründe, Beziehungen, Daten oder Lebensphasen.
+2. Erfinde keine Fakten, Motive, Beziehungen, Daten, Berufe, Abschlüsse oder Lebensphasen.
 3. Überinterpretiere keine einzelnen Aussagen.
-4. Nutze Außenperspektive, nicht Ich-Perspektive.
-5. Keine Psychologisierung.
-6. Keine Aussagen wie „schon immer“, „prägte sein Leben“, „war zentral“, wenn das nicht ausdrücklich belegt ist.
-7. Wenn Informationen lückenhaft sind, bleibe ehrlich und zurückhaltend.
-8. Lieber unvollständig als erfunden.
-9. Wenn mehrere Sessions vorhanden sind, führe sie zusammen, ohne doppelte Aussagen unnötig zu wiederholen.
-10. Wenn Zeitabfolgen erkennbar sind, ordne den Text möglichst chronologisch.
-11. Wenn die Zeitabfolge unklar ist, formuliere neutral und erfinde keine Reihenfolge.
-12. Kein Listenformat, sondern lesbarer Fließtext mit sinnvollen Abschnitten.
-13. Verwende nur Überschriften, wenn sie wirklich zum Material passen.
+4. Du darfst Informationen vorsichtig zeitlich ordnen, wenn die Reihenfolge aus dem Gesagten klar oder naheliegend ist.
+5. Du darfst NICHT inhaltlich ausschmücken.
+6. Keine Psychologisierung.
+7. Keine Floskeln wie "prägte sein Leben", "war schon immer", "zentraler Lebensfaktor", wenn das nicht ausdrücklich gesagt wurde.
+8. Keine Höflichkeitsform im Biografie-Text.
+9. Geschlecht nur verwenden, wenn es im Material klar erkennbar ist.
+10. Wenn das Geschlecht nicht klar ist, nutze den Namen oder neutrale Formulierungen wie "die Person".
+11. Kein Listenformat in der Biografie, sondern lesbarer Fließtext mit sinnvollen Abschnitten.
+12. Überschriften nur verwenden, wenn sie wirklich zum Material passen.
+13. Wenn wenig Material vorhanden ist, schreibe keine künstlich vollständige Lebensgeschichte.
+
+WICHTIGE REGELN FÜR DIE FRAGEN:
+1. Stelle 3 bis 5 konkrete, hilfreiche Folgefragen.
+2. Die Fragen sollen auf echten Lücken basieren.
+3. Keine generischen Fragen wie "Erzähl mehr".
+4. Keine Fragen zu Dingen, die bereits klar gesagt wurden.
+5. Die Fragen sollen Erinnerungen auslösen und zu weiterem Erzählen einladen.
+6. Die Fragen sollen nicht in Höflichkeitsform formuliert sein.
+7. Keine Ja/Nein-Fragen, wenn es vermeidbar ist.
+8. Fragen offen, konkret und ruhig formulieren.
 
 AUSGABELOGIK:
 - Bei sehr wenig Material:
-  Erstelle eine kurze, ehrliche Erstfassung mit 2 bis 5 Sätzen.
-  Formuliere nur das, was wirklich gesagt wurde.
-  Weise am Ende knapp darauf hin, dass für eine ausführlichere Lebensgeschichte mehr Erzählung nötig ist.
+  - Biografie kurz und ehrlich halten.
+  - Nichts aufblasen.
+  - Folgefragen trotzdem gezielt stellen, damit die nächste Session leichter fällt.
 
 - Bei ausreichend Material:
-  Erstelle eine zusammenhängende Fassung mit sinnvollen Abschnitten.
-  Wenn möglich, ordne vorsichtig in zeitlicher Reihenfolge.
-  Geeignete Abschnittsarten können sein:
-  Frühe Jahre, Kindheit, Jugend, Ausbildung, Beruf, Familie, Wendepunkte, Gegenwart.
-  Nutze aber nur Abschnitte, die im Material wirklich erkennbar sind.
+  - Biografie zusammenhängend und möglichst chronologisch ordnen.
+  - Doppelte Aussagen zusammenführen.
+  - Offene Lücken bewusst offen lassen.
+  - Folgefragen auf die wichtigsten fehlenden Bereiche richten.
 
-STIL:
+STIL DER BIOGRAFIE:
 - ruhig
 - menschlich
 - nüchtern
 - respektvoll
 - nicht kitschig
-- nicht wie ein Roman
-- nicht übertrieben glatt
-- nicht wie Werbung
-- nicht wie eine erfundene Biografie
+- nicht werblich
+- nicht überdramatisch
+- nicht wie eine erfundene Romanbiografie
 
-ZIEL:
-Die Person soll sich in dem Text wiedererkennen, ohne dass etwas hinzugedichtet wurde.
+WICHTIGES FORMAT:
+Gib ausschließlich gültiges JSON zurück, ohne Markdown und ohne zusätzliche Einleitung.
+
+Das JSON muss genau diese Struktur haben:
+{
+  "generated": "string",
+  "follow_up_questions": ["string", "string", "string"]
+}
 """
             },
             {
@@ -229,7 +297,32 @@ Die Person soll sich in dem Text wiedererkennen, ohne dass etwas hinzugedichtet 
         ]
     )
 
-    return structured.choices[0].message.content
+    content = response.choices[0].message.content.strip()
+
+    try:
+        parsed = json.loads(content)
+        generated = str(parsed.get("generated", "")).strip()
+        follow_up_questions = parsed.get("follow_up_questions", [])
+
+        if not isinstance(follow_up_questions, list):
+            follow_up_questions = []
+
+        follow_up_questions = [
+            str(q).strip()
+            for q in follow_up_questions
+            if str(q).strip()
+        ]
+
+        return generated, follow_up_questions[:5]
+
+    except Exception:
+        fallback_generated = content
+        fallback_questions = [
+            "Welche Erinnerungen aus der Kindheit oder Jugend fehlen bisher noch?",
+            "Welche Station nach Schule oder Ausbildung war für den weiteren Weg besonders wichtig?",
+            "Welche Menschen, Orte oder Ereignisse sollten in der Geschichte auf keinen Fall fehlen?",
+        ]
+        return fallback_generated, fallback_questions
 
 
 # =========================
@@ -239,6 +332,35 @@ Die Person soll sich in dem Text wiedererkennen, ohne dass etwas hinzugedichtet 
 @app.get("/")
 def root():
     return {"status": "ok"}
+
+
+@app.get("/person/{name}/latest")
+def get_latest_biography(name: str):
+    person_id = get_person_id_by_name(name)
+
+    if not person_id:
+        return {
+            "generated": "",
+            "follow_up_questions": []
+        }
+
+    combined_transcript = build_combined_transcript(person_id)
+
+    if not combined_transcript.strip():
+        return {
+            "generated": "",
+            "follow_up_questions": []
+        }
+
+    generated_text, follow_up_questions = generate_biography_and_questions(
+        name,
+        combined_transcript
+    )
+
+    return {
+        "generated": generated_text,
+        "follow_up_questions": follow_up_questions
+    }
 
 
 @app.post("/transcribe")
@@ -257,68 +379,24 @@ async def transcribe_audio(
             file=audio_file
         )
 
-    transcript_text = transcript.text
+    transcript_text = transcript.text.strip()
 
-    os.remove(temp_path)
+    if os.path.exists(temp_path):
+        os.remove(temp_path)
 
     person_id = get_or_create_person(person_name)
 
-    # Erst eine vorsichtige Session-Zusammenfassung für Backup/Sessionhistorie erzeugen
-    session_summary_response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {
-                "role": "system",
-                "content": """
-Du fasst eine einzelne Sprachaufnahme kurz und ehrlich zusammen.
-
-Regeln:
-- Nur Informationen verwenden, die tatsächlich genannt wurden
-- Nichts erfinden
-- Keine Psychologisierung
-- Kurz und nüchtern bleiben
-- Wenn der Input sehr dünn ist, ehrlich knapp bleiben
-- Deutsch
-"""
-            },
-            {
-                "role": "user",
-                "content": f"Person: {person_name}\n\nTranskript der neuen Session:\n\n{transcript_text}"
-            }
-        ]
-    )
-
-    session_generated_text = session_summary_response.choices[0].message.content
-
-    save_session(person_id, transcript_text, session_generated_text)
+    session_summary = generate_single_session_summary(person_name, transcript_text)
+    save_session(person_id, transcript_text, session_summary)
 
     combined_transcript = build_combined_transcript(person_id)
-    generated_text = generate_biography_from_all_sessions(person_name, combined_transcript)
+    generated_text, follow_up_questions = generate_biography_and_questions(
+        person_name,
+        combined_transcript
+    )
 
     return {
         "transcript": transcript_text,
-        "generated": generated_text
+        "generated": generated_text,
+        "follow_up_questions": follow_up_questions
     }
-@app.get("/person/{name}/latest")
-def get_latest_biography(name: str):
-    conn = get_connection()
-    cur = conn.cursor()
-
-    cur.execute("SELECT id FROM persons WHERE name = ?", (name,))
-    person = cur.fetchone()
-
-    if not person:
-        return {"generated": ""}
-
-    person_id = person["id"]
-
-    combined = build_combined_transcript(person_id)
-
-    if not combined:
-        return {"generated": ""}
-
-    generated = generate_biography_from_all_sessions(name, combined)
-
-    return {
-        "generated": generated
-    }    
