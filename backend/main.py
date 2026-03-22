@@ -25,15 +25,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DB_PATH = os.path.join("storage", "legacy.db")
+# =========================
+# PERSISTENT DATA PATHS
+# =========================
+
+BASE_DATA_DIR = "data"
+STORAGE_DIR = os.path.join(BASE_DATA_DIR, "storage")
+BACKUP_DIR = os.path.join(BASE_DATA_DIR, "backups")
+DB_PATH = os.path.join(STORAGE_DIR, "legacy.db")
 
 
 # =========================
 # DATABASE HELPERS
 # =========================
 
+def ensure_data_dirs():
+    os.makedirs(STORAGE_DIR, exist_ok=True)
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+
+
 def get_connection():
-    os.makedirs("storage", exist_ok=True)
+    ensure_data_dirs()
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
@@ -72,6 +84,8 @@ init_db()
 # =========================
 
 def get_or_create_person(name: str) -> int:
+    name = name.strip()
+
     conn = get_connection()
     cur = conn.cursor()
 
@@ -90,6 +104,8 @@ def get_or_create_person(name: str) -> int:
 
 
 def get_person_id_by_name(name: str):
+    name = name.strip()
+
     conn = get_connection()
     cur = conn.cursor()
 
@@ -124,9 +140,6 @@ def save_session(person_id: int, transcript_raw: str, generated_text: str) -> in
     session_id = cur.lastrowid
     conn.close()
 
-    backup_dir = "backups"
-    os.makedirs(backup_dir, exist_ok=True)
-
     backup_data = {
         "person_id": person_id,
         "session_id": session_id,
@@ -135,7 +148,7 @@ def save_session(person_id: int, transcript_raw: str, generated_text: str) -> in
         "generated_text": generated_text,
     }
 
-    backup_path = os.path.join(backup_dir, f"session_{session_id}.json")
+    backup_path = os.path.join(BACKUP_DIR, f"session_{session_id}.json")
 
     with open(backup_path, "w", encoding="utf-8") as f:
         json.dump(backup_data, f, ensure_ascii=False, indent=2)
@@ -353,7 +366,7 @@ def get_latest_biography(name: str):
         }
 
     generated_text, follow_up_questions = generate_biography_and_questions(
-        name,
+        name.strip(),
         combined_transcript
     )
 
@@ -368,6 +381,8 @@ async def transcribe_audio(
     file: UploadFile = File(...),
     person_name: str = Form(...)
 ):
+    person_name = person_name.strip()
+
     temp_path = f"temp_{file.filename}"
 
     with open(temp_path, "wb") as f:
