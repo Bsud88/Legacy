@@ -29,7 +29,7 @@ app.add_middleware(
 # PERSISTENT DATA PATHS
 # =========================
 
-BASE_DATA_DIR = "data"
+BASE_DATA_DIR = "/app/data"
 STORAGE_DIR = os.path.join(BASE_DATA_DIR, "storage")
 BACKUP_DIR = os.path.join(BASE_DATA_DIR, "backups")
 DB_PATH = os.path.join(STORAGE_DIR, "legacy.db")
