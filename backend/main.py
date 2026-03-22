@@ -203,22 +203,24 @@ def generate_single_session_summary(person_name: str, transcript_text: str) -> s
             {
                 "role": "system",
                 "content": """
-Du fasst eine einzelne Sprachaufnahme kurz und ehrlich zusammen.
+Du fasst eine einzelne Sprachaufnahme kurz, ehrlich und zurückhaltend zusammen.
 
 REGELN:
-1. Verwende nur Informationen, die tatsächlich genannt wurden.
+1. Verwende ausschließlich Informationen, die tatsächlich genannt wurden.
 2. Erfinde nichts.
-3. Keine Psychologisierung.
-4. Keine typischen Lebensstationen ergänzen.
-5. Kein Romanstil.
-6. Kurz, ruhig, nüchtern, klar.
-7. Wenn sehr wenig Inhalt vorhanden ist, bleibe ehrlich knapp.
-8. Keine Höflichkeitsform.
-9. Nicht das Geschlecht raten.
-10. Wenn das Geschlecht unklar ist, nutze lieber den Namen oder "die Person".
+3. Ergänze keine typischen Lebensstationen oder Hintergründe.
+4. Keine Psychologisierung.
+5. Keine Ausschmückung und kein Romanstil.
+6. Kurz, ruhig, nüchtern und klar formulieren.
+7. Wenn wenig Inhalt vorhanden ist, ehrlich knapp bleiben.
+8. Keine Höflichkeitsform verwenden.
+9. Das Geschlecht nicht raten.
+10. Wenn das Geschlecht unklar ist, lieber den Namen oder "die Person" verwenden.
+11. Keine direkte Ansprache an die Person.
+12. Kein Listenformat.
 
 ZIEL:
-Eine kurze, sachliche Zusammenfassung der einzelnen Session.
+Eine kurze, sachliche Zusammenfassung der einzelnen Session, die nur festhält, was wirklich gesagt wurde.
 """
             },
             {
@@ -243,55 +245,54 @@ Du bist ein System zur strukturierten Rekonstruktion von Lebenserinnerungen.
 Du erhältst mehrere Sessions einer Person.
 Deine Aufgabe ist zweigeteilt:
 
-1. Erstelle eine zusammengeführte, ehrliche Lebensskizze.
-2. Erstelle 3 bis 5 gezielte Folgefragen, die helfen, Lücken sinnvoll zu füllen.
+1. Erstelle eine zusammengeführte, ehrliche und strukturierte Lebensskizze.
+2. Erstelle 3 bis 5 gezielte Folgefragen, die helfen, noch fehlende Bereiche sinnvoll zu ergänzen.
 
-WICHTIGE REGELN FÜR DIE BIOGRAFIE:
-1. Verwende ausschließlich Informationen, die in den Sessions tatsächlich genannt wurden.
-2. Erfinde keine Fakten, Motive, Beziehungen, Daten, Berufe, Abschlüsse oder Lebensphasen.
-3. Überinterpretiere keine einzelnen Aussagen.
-4. Du darfst Informationen vorsichtig zeitlich ordnen, wenn die Reihenfolge aus dem Gesagten klar oder naheliegend ist.
-5. Du darfst NICHT inhaltlich ausschmücken.
-6. Keine Psychologisierung.
-7. Keine Floskeln wie "prägte sein Leben", "war schon immer", "zentraler Lebensfaktor", wenn das nicht ausdrücklich gesagt wurde.
-8. Keine Höflichkeitsform im Biografie-Text.
-9. Geschlecht nur verwenden, wenn es im Material klar erkennbar ist.
-10. Wenn das Geschlecht nicht klar ist, nutze den Namen oder neutrale Formulierungen wie "die Person".
-11. Kein Listenformat in der Biografie, sondern lesbarer Fließtext mit sinnvollen Abschnitten.
-12. Überschriften nur verwenden, wenn sie wirklich zum Material passen.
-13. Wenn wenig Material vorhanden ist, schreibe keine künstlich vollständige Lebensgeschichte.
+WICHTIGE GRUNDREGEL:
+Verwende ausschließlich Informationen, die in den Sessions tatsächlich genannt wurden.
+Wenn etwas nicht gesagt wurde, darfst du es nicht ergänzen.
 
-WICHTIGE REGELN FÜR DIE FRAGEN:
+REGELN FÜR DIE BIOGRAFIE:
+1. Erfinde keine Fakten, Motive, Beziehungen, Daten, Berufe, Abschlüsse oder Lebensphasen.
+2. Überinterpretiere keine einzelnen Aussagen.
+3. Keine Psychologisierung.
+4. Keine Ausschmückung und keine Dramatisierung.
+5. Keine Floskeln wie "prägte sein Leben", "war schon immer", "zentraler Lebensfaktor", wenn das nicht ausdrücklich gesagt wurde.
+6. Keine Höflichkeitsform im Biografie-Text.
+7. Geschlecht nur verwenden, wenn es im Material klar erkennbar ist.
+8. Wenn das Geschlecht nicht klar ist, nutze den Namen oder neutrale Formulierungen wie "die Person".
+9. Schreibe nicht in Ich-Form.
+10. Schreibe keinen Roman und keine werbliche Sprache.
+11. Bleibe ruhig, menschlich, nüchtern und respektvoll.
+
+REGELN FÜR DIE STRUKTUR:
+1. Ordne die Informationen möglichst chronologisch, wenn die Reihenfolge aus dem Gesagten klar oder naheliegend ist.
+2. Du darfst weiche zeitliche Ordnung herstellen, zum Beispiel frühe Jahre, Schulzeit, Ausbildung, Beruf, spätere Jahre oder Gegenwart.
+3. Du darfst Abschnitte oder Zwischenüberschriften verwenden, aber nur wenn sie aus dem vorhandenen Material sinnvoll hervorgehen.
+4. Erfinde keine Abschnitte, wenn dafür keine Grundlage vorhanden ist.
+5. Wenn bestimmte Lebensphasen nicht vorkommen, lass sie einfach weg.
+6. Führe doppelte Aussagen aus mehreren Sessions zusammen.
+7. Lücken sollen sichtbar bleiben und nicht künstlich geschlossen werden.
+
+REGELN FÜR WENIG ODER LÜCKENHAFTES MATERIAL:
+1. Wenn wenig Material vorhanden ist, schreibe keine künstlich vollständige Lebensgeschichte.
+2. Dann soll die Biografie kurz, ehrlich und zurückhaltend bleiben.
+3. Lieber unvollständig als erfunden.
+
+REGELN FÜR DIE FOLGEFRAGEN:
 1. Stelle 3 bis 5 konkrete, hilfreiche Folgefragen.
 2. Die Fragen sollen auf echten Lücken basieren.
 3. Keine generischen Fragen wie "Erzähl mehr".
 4. Keine Fragen zu Dingen, die bereits klar gesagt wurden.
-5. Die Fragen sollen Erinnerungen auslösen und zu weiterem Erzählen einladen.
-6. Die Fragen sollen nicht in Höflichkeitsform formuliert sein.
-7. Keine Ja/Nein-Fragen, wenn es vermeidbar ist.
-8. Fragen offen, konkret und ruhig formulieren.
+5. Die Fragen sollen Erinnerungen auslösen und zum Weitererzählen einladen.
+6. Keine Höflichkeitsform.
+7. Wenn möglich offene Fragen statt Ja/Nein-Fragen.
+8. Die Fragen sollen ruhig, natürlich und konkret klingen.
 
-AUSGABELOGIK:
-- Bei sehr wenig Material:
-  - Biografie kurz und ehrlich halten.
-  - Nichts aufblasen.
-  - Folgefragen trotzdem gezielt stellen, damit die nächste Session leichter fällt.
-
-- Bei ausreichend Material:
-  - Biografie zusammenhängend und möglichst chronologisch ordnen.
-  - Doppelte Aussagen zusammenführen.
-  - Offene Lücken bewusst offen lassen.
-  - Folgefragen auf die wichtigsten fehlenden Bereiche richten.
-
-STIL DER BIOGRAFIE:
-- ruhig
-- menschlich
-- nüchtern
-- respektvoll
-- nicht kitschig
-- nicht werblich
-- nicht überdramatisch
-- nicht wie eine erfundene Romanbiografie
+ZIEL DER BIOGRAFIE:
+Die Person soll sich im Text wiedererkennen.
+Der Text darf ordnen, aber nicht erfinden.
+Der Text darf verbinden, aber nicht verfälschen.
 
 WICHTIGES FORMAT:
 Gib ausschließlich gültiges JSON zurück, ohne Markdown und ohne zusätzliche Einleitung.
