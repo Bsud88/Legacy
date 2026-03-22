@@ -6,15 +6,18 @@ function App() {
   const [statusText, setStatusText] = useState('Bereit für deine erste Erzählung.')
   const [transcript, setTranscript] = useState('')
   const [personName, setPersonName] = useState('Vater')
+  const [followUpQuestions, setFollowUpQuestions] = useState([])
 
   const mediaRecorderRef = useRef(null)
   const audioChunksRef = useRef([])
   const streamRef = useRef(null)
 
+  const API_BASE = 'https://legacy-production-6e24.up.railway.app'
+
   const loadBiography = async (selectedPerson) => {
     try {
       const response = await fetch(
-        `https://legacy-production-6e24.up.railway.app/person/${encodeURIComponent(selectedPerson)}/latest`
+        `${API_BASE}/person/${encodeURIComponent(selectedPerson)}/latest`
       )
 
       if (!response.ok) {
@@ -25,14 +28,17 @@ function App() {
 
       if (data.generated) {
         setTranscript(data.generated)
+        setFollowUpQuestions(Array.isArray(data.follow_up_questions) ? data.follow_up_questions : [])
         setStatusText(`Letzte Biografie geladen für: ${selectedPerson}`)
       } else {
         setTranscript('')
+        setFollowUpQuestions([])
         setStatusText(`Noch keine gespeicherte Biografie für: ${selectedPerson}`)
       }
     } catch (error) {
       console.error(error)
       setTranscript('')
+      setFollowUpQuestions([])
       setStatusText('Gespeicherte Biografie konnte nicht geladen werden.')
     }
   }
@@ -78,7 +84,7 @@ function App() {
             formData.append('file', audioBlob, 'recording.webm')
             formData.append('person_name', personName)
 
-            const response = await fetch('https://legacy-production-6e24.up.railway.app/transcribe', {
+            const response = await fetch(`${API_BASE}/transcribe`, {
               method: 'POST',
               body: formData,
             })
@@ -89,7 +95,8 @@ function App() {
 
             const data = await response.json()
 
-            setTranscript(data.generated)
+            setTranscript(data.generated || '')
+            setFollowUpQuestions(Array.isArray(data.follow_up_questions) ? data.follow_up_questions : [])
             setStatusText(`Fertig! Session gespeichert für: ${personName}`)
           } catch (error) {
             console.error(error)
@@ -179,6 +186,19 @@ function App() {
             <div className="result-preview">
               <p><strong>Deine Lebensgeschichte</strong></p>
               <p style={{ whiteSpace: 'pre-line' }}>{transcript}</p>
+
+              {followUpQuestions.length > 0 && (
+                <div style={{ marginTop: '24px' }}>
+                  <p><strong>Mögliche nächste Fragen</strong></p>
+                  <ul style={{ paddingLeft: '20px', marginTop: '10px' }}>
+                    {followUpQuestions.map((question, index) => (
+                      <li key={index} style={{ marginBottom: '10px', whiteSpace: 'pre-line' }}>
+                        {question}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           ) : (
             <div className="result-preview">
