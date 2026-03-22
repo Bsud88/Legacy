@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import './App.css'
 
 function App() {
@@ -10,6 +10,42 @@ function App() {
   const mediaRecorderRef = useRef(null)
   const audioChunksRef = useRef([])
   const streamRef = useRef(null)
+
+  const loadBiography = async (selectedPerson) => {
+    try {
+      const response = await fetch(
+        `https://legacy-production-6e24.up.railway.app/person/${encodeURIComponent(selectedPerson)}/latest`
+      )
+
+      if (!response.ok) {
+        throw new Error(`Fehler beim Laden: ${response.status}`)
+      }
+
+      const data = await response.json()
+
+      if (data.generated) {
+        setTranscript(data.generated)
+        setStatusText(`Letzte Biografie geladen für: ${selectedPerson}`)
+      } else {
+        setTranscript('')
+        setStatusText(`Noch keine gespeicherte Biografie für: ${selectedPerson}`)
+      }
+    } catch (error) {
+      console.error(error)
+      setTranscript('')
+      setStatusText('Gespeicherte Biografie konnte nicht geladen werden.')
+    }
+  }
+
+  useEffect(() => {
+    loadBiography(personName)
+  }, [])
+
+  const handlePersonChange = async (e) => {
+    const value = e.target.value
+    setPersonName(value)
+    await loadBiography(value)
+  }
 
   const handleRecordingToggle = async () => {
     if (!isRecording) {
@@ -95,7 +131,7 @@ function App() {
             <select
               id="personName"
               value={personName}
-              onChange={(e) => setPersonName(e.target.value)}
+              onChange={handlePersonChange}
               disabled={isRecording}
               style={{
                 width: '100%',
