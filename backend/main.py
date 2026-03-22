@@ -8,25 +8,28 @@ from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
 
-# 🔥 .env laden
+# .env laden
 load_dotenv()
 
-# 🔥 OpenAI Client
+# OpenAI Client
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# 🔥 App init
+# App init
 app = FastAPI()
 
-# 🔥 CORS (Frontend Zugriff)
+# CORS (Frontend Zugriff FIX)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "https://legacy-six-delta.vercel.app",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 🔥 DB Pfad
+# DB Pfad
 DB_PATH = os.path.join("storage", "legacy.db")
 
 
@@ -114,7 +117,7 @@ def save_session(person_id: int, transcript_raw: str, generated_text: str) -> in
     session_id = cur.lastrowid
     conn.close()
 
-    # 🔥 JSON Backup
+    # JSON Backup
     backup_dir = "backups"
     os.makedirs(backup_dir, exist_ok=True)
 
@@ -148,13 +151,13 @@ async def transcribe_audio(
     file: UploadFile = File(...),
     person_name: str = Form(...)
 ):
-    # 🔥 temp file speichern
+    # temp file speichern
     temp_path = f"temp_{file.filename}"
 
     with open(temp_path, "wb") as f:
         f.write(await file.read())
 
-    # 🔥 Speech to Text
+    # Speech to Text
     with open(temp_path, "rb") as audio_file:
         transcript = client.audio.transcriptions.create(
             model="gpt-4o-transcribe",
@@ -163,10 +166,10 @@ async def transcribe_audio(
 
     transcript_text = transcript.text
 
-    # 🔥 Datei löschen
+    # Datei löschen
     os.remove(temp_path)
 
-    # 🔥 Strukturierung
+    # Strukturierung
     structured = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
@@ -183,7 +186,7 @@ async def transcribe_audio(
 
     generated_text = structured.choices[0].message.content
 
-    # 🔥 Person + Session speichern
+    # Person + Session speichern
     person_id = get_or_create_person(person_name)
     save_session(person_id, transcript_text, generated_text)
 
