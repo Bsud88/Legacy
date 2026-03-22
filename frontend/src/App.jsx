@@ -42,7 +42,7 @@ function App() {
             formData.append('file', audioBlob, 'recording.webm')
             formData.append('person_name', personName)
 
-            const response = await fetch('http://127.0.0.1:8001/transcribe', {
+            const response = await fetch('https://legacy-production-6e24.up.railway.app/transcribe', {
               method: 'POST',
               body: formData,
             })
@@ -53,8 +53,8 @@ function App() {
 
             const data = await response.json()
 
-            setTranscript(data.structured)
-            setStatusText(`Fertig! Session gespeichert für: ${data.person_name}`)
+            setTranscript(data.generated)
+            setStatusText(`Fertig! Session gespeichert für: ${personName}`)
           } catch (error) {
             console.error(error)
             setStatusText('Fehler bei der Verarbeitung.')
