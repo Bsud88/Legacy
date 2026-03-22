@@ -8,16 +8,12 @@ from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
 
-# .env laden
 load_dotenv()
 
-# OpenAI Client
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# App init
 app = FastAPI()
 
-# CORS (Frontend Zugriff FIX)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -29,7 +25,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# DB Pfad
 DB_PATH = os.path.join("storage", "legacy.db")
 
 
@@ -91,12 +86,11 @@ def get_or_create_person(name: str) -> int:
     conn.commit()
     person_id = cur.lastrowid
     conn.close()
-
     return person_id
 
 
 # =========================
-# SAVE SESSION + BACKUP
+# SESSION HELPERS
 # =========================
 
 def save_session(person_id: int, transcript_raw: str, generated_text: str) -> int:
@@ -117,7 +111,6 @@ def save_session(person_id: int, transcript_raw: str, generated_text: str) -> in
     session_id = cur.lastrowid
     conn.close()
 
-    # JSON Backup
     backup_dir = "backups"
     os.makedirs(backup_dir, exist_ok=True)
 
@@ -137,6 +130,108 @@ def save_session(person_id: int, transcript_raw: str, generated_text: str) -> in
     return session_id
 
 
+def get_sessions_for_person(person_id: int):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        SELECT id, created_at, transcript_raw, generated_text
+        FROM sessions
+        WHERE person_id = ?
+        ORDER BY created_at ASC, id ASC
+        """,
+        (person_id,),
+    )
+
+    rows = cur.fetchall()
+    conn.close()
+    return rows
+
+
+def build_combined_transcript(person_id: int) -> str:
+    sessions = get_sessions_for_person(person_id)
+
+    if not sessions:
+        return ""
+
+    parts = []
+    for i, session in enumerate(sessions, start=1):
+        parts.append(
+            f"SESSION {i}\n"
+            f"Zeitpunkt: {session['created_at']}\n"
+            f"Transkript:\n{session['transcript_raw']}\n"
+        )
+
+    return "\n\n".join(parts)
+
+
+def generate_biography_from_all_sessions(person_name: str, combined_transcript: str) -> str:
+    structured = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": """
+Du bist ein Assistent für die strukturierte Aufbereitung von Lebenserinnerungen.
+
+Deine Aufgabe:
+Du erhältst mehrere Sessions einer Person. Jede Session enthält Ausschnitte aus Erzählungen über das Leben dieser Person.
+Du sollst daraus eine ehrliche, vorsichtige, zusammengeführte Lebensskizze in deutscher Sprache erstellen.
+
+WICHTIGE REGELN:
+1. Verwende ausschließlich Informationen, die in den Sessions tatsächlich genannt wurden.
+2. Erfinde keine Fakten, Motive, Hintergründe, Beziehungen, Daten oder Lebensphasen.
+3. Überinterpretiere keine einzelnen Aussagen.
+4. Nutze Außenperspektive, nicht Ich-Perspektive.
+5. Keine Psychologisierung.
+6. Keine Aussagen wie „schon immer“, „prägte sein Leben“, „war zentral“, wenn das nicht ausdrücklich belegt ist.
+7. Wenn Informationen lückenhaft sind, bleibe ehrlich und zurückhaltend.
+8. Lieber unvollständig als erfunden.
+9. Wenn mehrere Sessions vorhanden sind, führe sie zusammen, ohne doppelte Aussagen unnötig zu wiederholen.
+10. Wenn Zeitabfolgen erkennbar sind, ordne den Text möglichst chronologisch.
+11. Wenn die Zeitabfolge unklar ist, formuliere neutral und erfinde keine Reihenfolge.
+12. Kein Listenformat, sondern lesbarer Fließtext mit sinnvollen Abschnitten.
+13. Verwende nur Überschriften, wenn sie wirklich zum Material passen.
+
+AUSGABELOGIK:
+- Bei sehr wenig Material:
+  Erstelle eine kurze, ehrliche Erstfassung mit 2 bis 5 Sätzen.
+  Formuliere nur das, was wirklich gesagt wurde.
+  Weise am Ende knapp darauf hin, dass für eine ausführlichere Lebensgeschichte mehr Erzählung nötig ist.
+
+- Bei ausreichend Material:
+  Erstelle eine zusammenhängende Fassung mit sinnvollen Abschnitten.
+  Wenn möglich, ordne vorsichtig in zeitlicher Reihenfolge.
+  Geeignete Abschnittsarten können sein:
+  Frühe Jahre, Kindheit, Jugend, Ausbildung, Beruf, Familie, Wendepunkte, Gegenwart.
+  Nutze aber nur Abschnitte, die im Material wirklich erkennbar sind.
+
+STIL:
+- ruhig
+- menschlich
+- nüchtern
+- respektvoll
+- nicht kitschig
+- nicht wie ein Roman
+- nicht übertrieben glatt
+- nicht wie Werbung
+- nicht wie eine erfundene Biografie
+
+ZIEL:
+Die Person soll sich in dem Text wiedererkennen, ohne dass etwas hinzugedichtet wurde.
+"""
+            },
+            {
+                "role": "user",
+                "content": f"Person: {person_name}\n\nHier sind alle bisher vorhandenen Sessions in zeitlicher Reihenfolge:\n\n{combined_transcript}"
+            }
+        ]
+    )
+
+    return structured.choices[0].message.content
+
+
 # =========================
 # ROUTES
 # =========================
@@ -151,13 +246,11 @@ async def transcribe_audio(
     file: UploadFile = File(...),
     person_name: str = Form(...)
 ):
-    # temp file speichern
     temp_path = f"temp_{file.filename}"
 
     with open(temp_path, "wb") as f:
         f.write(await file.read())
 
-    # Speech to Text
     with open(temp_path, "rb") as audio_file:
         transcript = client.audio.transcriptions.create(
             model="gpt-4o-transcribe",
@@ -166,70 +259,41 @@ async def transcribe_audio(
 
     transcript_text = transcript.text
 
-    # Datei löschen
     os.remove(temp_path)
 
-    # Strukturierung
-    structured = client.chat.completions.create(
-    model="gpt-4o-mini",
-    messages=[
-        {
-            "role": "system",
-            "content": """
-    Du bist ein Assistent für die strukturierte Aufbereitung von Lebenserinnerungen.
+    person_id = get_or_create_person(person_name)
 
-    Deine Aufgabe:
-    Du sollst aus einem gesprochenen Transkript eine erste, ehrliche und zurückhaltende Lebensskizze erstellen.
+    # Erst eine vorsichtige Session-Zusammenfassung für Backup/Sessionhistorie erzeugen
+    session_summary_response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": """
+Du fasst eine einzelne Sprachaufnahme kurz und ehrlich zusammen.
 
-    WICHTIGE REGELN:
-    1. Verwende ausschließlich Informationen, die im Transkript tatsächlich genannt wurden.
-    2. Erfinde keine Fakten, Motive, Hintergründe, Lebensphasen oder Beziehungen.
-    3. Überinterpretiere keine einzelnen Aussagen.
-    4. Baue keine vollständige Biografie, wenn nur sehr wenig Material vorliegt.
-    5. Keine Psychologisierung.
-    6. Keine Aussagen wie „schon immer“, „seit der Kindheit“, „prägte sein Leben“, wenn das nicht ausdrücklich gesagt wurde.
-    7. Wenn der Input kurz, oberflächlich oder unvollständig ist, bleibe ehrlich und knapp.
-    8. Lieber zu vorsichtig als zu kreativ.
-    9. Schreibe auf Deutsch.
-    10. Kein Listenformat, sondern gut lesbarer Fließtext mit klaren Abschnitten nur dann, wenn genug Inhalt vorhanden ist.
-
-    AUSGABELOGIK:
-    - Wenn das Transkript sehr kurz oder inhaltlich zu dünn ist:
-    Erstelle KEINE erfundene Lebensgeschichte.
-    Schreibe stattdessen eine kurze, ehrliche Erstfassung mit 2 bis 5 Sätzen.
-    Formuliere neutral, was tatsächlich erwähnt wurde.
-    Weise am Ende knapp darauf hin, dass für eine ausführlichere Lebensgeschichte mehr Erzählung nötig ist.
-
-    - Wenn genug Inhalt vorhanden ist:
-    Strukturiere vorsichtig in sinnvolle Abschnitte, aber nur auf Basis des Gesagten.
-    Nutze nur Abschnitte, die wirklich zum Inhalt passen.
-    Mögliche Überschriften nur wenn passend: Kindheit, Jugend, Beruf, Familie, Wendepunkte, Gegenwart.
-
-    STIL:
-    - ruhig
-    - menschlich
-    - nüchtern
-    - respektvoll
-    - nicht kitschig
-    - nicht wie ein Roman
-    - nicht wie eine KI-Zusammenfassung mit Floskeln
-
-    ZIEL:
-    Der Text soll sich echt anfühlen und nichts behaupten, was nicht gesagt wurde.
-    """
+Regeln:
+- Nur Informationen verwenden, die tatsächlich genannt wurden
+- Nichts erfinden
+- Keine Psychologisierung
+- Kurz und nüchtern bleiben
+- Wenn der Input sehr dünn ist, ehrlich knapp bleiben
+- Deutsch
+"""
             },
             {
                 "role": "user",
-                "content": f"Hier ist das Transkript:\n\n{transcript_text}"
+                "content": f"Person: {person_name}\n\nTranskript der neuen Session:\n\n{transcript_text}"
             }
         ]
     )
 
-    generated_text = structured.choices[0].message.content
+    session_generated_text = session_summary_response.choices[0].message.content
 
-    # Person + Session speichern
-    person_id = get_or_create_person(person_name)
-    save_session(person_id, transcript_text, generated_text)
+    save_session(person_id, transcript_text, session_generated_text)
+
+    combined_transcript = build_combined_transcript(person_id)
+    generated_text = generate_biography_from_all_sessions(person_name, combined_transcript)
 
     return {
         "transcript": transcript_text,
