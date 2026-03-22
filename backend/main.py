@@ -299,3 +299,26 @@ Regeln:
         "transcript": transcript_text,
         "generated": generated_text
     }
+@app.get("/person/{name}/latest")
+def get_latest_biography(name: str):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("SELECT id FROM persons WHERE name = ?", (name,))
+    person = cur.fetchone()
+
+    if not person:
+        return {"generated": ""}
+
+    person_id = person["id"]
+
+    combined = build_combined_transcript(person_id)
+
+    if not combined:
+        return {"generated": ""}
+
+    generated = generate_biography_from_all_sessions(name, combined)
+
+    return {
+        "generated": generated
+    }    
